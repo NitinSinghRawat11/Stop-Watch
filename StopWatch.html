@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Innovative Digital Stopwatch</title>
+    <!-- Load Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font and base styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background */
+        }
+        /* Style for the stopwatch time display */
+        .time-display {
+            font-family: 'monospace', 'Inter';
+            letter-spacing: -2px;
+            text-shadow: 0 0 15px rgba(52, 211, 153, 0.4); /* Neon shadow effect */
+        }
+        /* Adjust layout for smaller screens */
+        @media (max-width: 640px) {
+            .time-display {
+                font-size: 4rem; /* Smaller font size for time on mobile */
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="stopwatch-container" class="w-full max-w-2xl bg-gray-800 p-8 md:p-12 rounded-2xl shadow-2xl border border-gray-700">
+        
+        <h1 class="text-3xl font-extrabold text-white mb-2 text-center">
+            Digital Chronometer
+        </h1>
+        <p class="text-gray-400 text-center mb-10">
+            Innovative Timer with Lap Analysis (Millisecond Precision)
+        </p>
+
+        <!-- Time Display Area (Updated to show 3 fractional digits) -->
+        <div class="flex flex-col items-center mb-10">
+            <div id="display" class="time-display text-7xl md:text-8xl font-thin text-emerald-400">
+                00:00:00.<span id="milliseconds-display" class="text-4xl md:text-5xl">000</span>
+            </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex justify-center space-x-4 md:space-x-8 mb-10">
+            <!-- Lap/Reset Button -->
+            <button id="lapResetBtn" 
+                class="flex-1 max-w-[120px] py-3 text-lg font-semibold rounded-full 
+                       text-white bg-gray-600 hover:bg-gray-700 transition duration-150 
+                       shadow-lg hover:shadow-xl active:scale-95">
+                Lap
+            </button>
+
+            <!-- Start/Pause Button -->
+            <button id="startPauseBtn" 
+                class="flex-1 max-w-[150px] py-4 text-xl font-bold rounded-full 
+                       text-white bg-emerald-600 hover:bg-emerald-700 transition duration-150 
+                       shadow-2xl shadow-emerald-700/50 hover:shadow-emerald-700/80 active:scale-95">
+                Start
+            </button>
+        </div>
+
+        <!-- Lap History Section -->
+        <div class="max-h-80 overflow-y-auto bg-gray-900 rounded-lg p-4 border border-gray-700">
+            <h2 class="text-xl font-semibold text-white sticky top-0 bg-gray-900 pb-2 z-10 border-b border-gray-700">
+                Lap History
+            </h2>
+            <ul id="lapsList" class="space-y-2 pt-2">
+                <!-- Lap times will be inserted here by JavaScript -->
+            </ul>
+            <p id="noLapsMessage" class="text-gray-500 text-center py-4">
+                Press START and LAP to record times.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // --- Core Variables ---
+        let startTime = 0;          // Time when the stopwatch was started or resumed
+        let elapsedTime = 0;        // Total elapsed time when paused
+        let isRunning = false;
+        let intervalId = null;
+        let lapTimes = [];          // Stores all recorded lap times (in ms)
+        let previousLapTime = 0;    // Time of the previous recorded lap
+
+        // --- DOM Elements ---
+        const display = document.getElementById('display');
+        const millisecondsDisplay = document.getElementById('milliseconds-display');
+        const startPauseBtn = document.getElementById('startPauseBtn');
+        const lapResetBtn = document.getElementById('lapResetBtn');
+        const lapsList = document.getElementById('lapsList');
+        const noLapsMessage = document.getElementById('noLapsMessage');
+        
+        // --- Utility Functions ---
+
+        /**
+         * Converts total milliseconds into a formatted time string (HH:MM:SS.mmm).
+         * @param {number} ms - Time in milliseconds.
+         * @returns {string} Formatted time string.
+         */
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            
+            // --- CHANGE FOR MICROSECOND/MILLI-PRECISION DISPLAY ---
+            const milliseconds = String(ms % 1000).padStart(3, '0'); // Now shows three digits (000-999)
+            
+            // Update the separate elements
+            millisecondsDisplay.textContent = milliseconds;
+            return `${hours}:${minutes}:${seconds}.`;
+        }
+
+        /**
+         * Updates the display with the current elapsed time.
+         */
+        function updateDisplay() {
+            // Calculate current time: (Current time - Start time) + Previous elapsed time
+            const currentTime = isRunning ? (Date.now() - startTime + elapsedTime) : elapsedTime;
+            const formattedTime = formatTime(currentTime);
+            
+            // Set the main time part
+            display.textContent = formattedTime;
+        }
+
+        // --- Stopwatch Control Functions ---
+
+        function start() {
+            if (isRunning) return;
+
+            isRunning = true;
+            // Set the start time relative to the current clock time
+            startTime = Date.now();
+            
+            // Change button text and style
+            startPauseBtn.textContent = 'Pause';
+            startPauseBtn.classList.replace('bg-emerald-600', 'bg-red-600');
+            startPauseBtn.classList.replace('shadow-emerald-700/50', 'shadow-red-700/50');
+
+            lapResetBtn.textContent = 'Lap';
+            lapResetBtn.classList.replace('bg-red-600', 'bg-gray-600'); // Ensure it's not red after reset
+
+            // --- CHANGE FOR MICROSECOND/MILLI-PRECISION UPDATE ---
+            // Run the timer interval every 1 millisecond for the highest practical browser precision
+            intervalId = setInterval(updateDisplay, 1); 
+        }
+
+        function pause() {
+            if (!isRunning) return;
+
+            isRunning = false;
+            // Calculate the total elapsed time before stopping
+            elapsedTime += Date.now() - startTime;
+            
+            // Stop the interval
+            clearInterval(intervalId);
+
+            // Change button text and style
+            startPauseBtn.textContent = 'Start';
+            startPauseBtn.classList.replace('bg-red-600', 'bg-emerald-600');
+            startPauseBtn.classList.replace('shadow-red-700/50', 'shadow-emerald-700/50');
+            
+            lapResetBtn.textContent = 'Reset';
+            lapResetBtn.classList.replace('bg-gray-600', 'bg-red-600');
+        }
+
+        function reset() {
+            // Stop the timer and clear all state
+            clearInterval(intervalId);
+            isRunning = false;
+            startTime = 0;
+            elapsedTime = 0;
+            lapTimes = [];
+            previousLapTime = 0;
+
+            // Reset UI
+            display.textContent = '00:00:00.';
+            millisecondsDisplay.textContent = '000'; // Reset to three zeros
+            lapsList.innerHTML = ''; // Clear lap history
+            
+            // Reset buttons
+            startPauseBtn.textContent = 'Start';
+            startPauseBtn.classList.replace('bg-red-600', 'bg-emerald-600');
+            startPauseBtn.classList.replace('shadow-red-700/50', 'shadow-emerald-700/50');
+            lapResetBtn.textContent = 'Lap';
+            lapResetBtn.classList.replace('bg-red-600', 'bg-gray-600');
+            
+            // Show message
+            noLapsMessage.classList.remove('hidden');
+        }
+
+        function recordLap() {
+            if (!isRunning) return;
+
+            noLapsMessage.classList.add('hidden'); // Hide "No Laps" message
+
+            // Total elapsed time since last start/resume
+            const totalElapsedTime = Date.now() - startTime + elapsedTime;
+            
+            // Calculate the time for *this specific lap*
+            const currentLapTime = totalElapsedTime - previousLapTime;
+            
+            // Record this lap time and update the marker for the next lap
+            lapTimes.push(currentLapTime);
+            previousLapTime = totalElapsedTime;
+
+            // --- Innovative Feature: Dynamic Lap Highlighting ---
+            
+            // Re-render the entire list to apply new highlighting
+            renderLaps();
+            
+            // Scroll to the latest lap item
+            lapsList.scrollTop = lapsList.scrollHeight;
+        }
+
+        /**
+         * Renders the lap history and highlights the fastest/slowest laps.
+         */
+        function renderLaps() {
+            lapsList.innerHTML = '';
+            
+            if (lapTimes.length === 0) {
+                noLapsMessage.classList.remove('hidden');
+                return;
+            }
+
+            const minLap = lapTimes.length > 1 ? Math.min(...lapTimes) : null;
+            const maxLap = lapTimes.length > 1 ? Math.max(...lapTimes) : null;
+            
+            lapTimes.forEach((lapMs, index) => {
+                // We use reduce on the total time to ensure the cumulative time is precise
+                const totalTime = lapTimes.slice(0, index + 1).reduce((a, b) => a + b, 0);
+                const totalTimeFormatted = formatTime(totalTime).slice(0, -1) + formatTime(totalTime).split('.')[1];
+                const lapTimeFormatted = formatTime(lapMs).slice(0, -1) + formatTime(lapMs).split('.')[1];
+
+                let textColor = 'text-gray-200';
+                let tag = '';
+
+                if (lapTimes.length > 1) {
+                    if (lapMs === minLap) {
+                        textColor = 'text-green-400 font-bold';
+                        tag = '<span class="text-xs ml-2 bg-green-900/50 px-2 py-0.5 rounded-full">FASTEST</span>';
+                    } else if (lapMs === maxLap) {
+                        textColor = 'text-red-400 font-bold';
+                        tag = '<span class="text-xs ml-2 bg-red-900/50 px-2 py-0.5 rounded-full">SLOWEST</span>';
+                    }
+                }
+
+                const lapItem = document.createElement('li');
+                lapItem.className = `flex justify-between items-center py-2 px-3 rounded-lg border-b border-gray-700/50 last:border-b-0 transition-colors ${textColor}`;
+                
+                lapItem.innerHTML = `
+                    <span class="text-base font-medium">Lap ${index + 1}</span>
+                    <div class="flex items-center text-sm">
+                        <span class="text-sm text-gray-400 mr-4">Total: ${totalTimeFormatted}</span>
+                        <span class="text-lg ${textColor}">+${lapTimeFormatted}</span>
+                        ${tag}
+                    </div>
+                `;
+                lapsList.prepend(lapItem); // Prepend so newest lap is at the top
+            });
+        }
+
+
+        // --- Event Listeners ---
+
+        startPauseBtn.addEventListener('click', () => {
+            if (isRunning) {
+                pause();
+            } else {
+                start();
+            }
+        });
+
+        lapResetBtn.addEventListener('click', () => {
+            if (isRunning) {
+                recordLap();
+            } else {
+                // Only allow reset when paused
+                if (lapResetBtn.textContent === 'Reset') {
+                    reset();
+                } else {
+                    // Safety case: if the user clicks 'Lap' before starting
+                    start(); 
+                }
+            }
+        });
+        
+        // Initialize display on load
+        window.onload = updateDisplay;
+
+    </script>
+</body>
+</html>
